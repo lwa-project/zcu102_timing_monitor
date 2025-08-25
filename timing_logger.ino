@@ -9,7 +9,7 @@
  * - We keep the rails well inside ADC range (mid-scale-ish) per your dividers.
  * - We store thresholds + last-known epoch in flash (FlashStorage_SAMD).
  * - We DO NOT update flash every 0.5 s (flash wear ~10k cycles/row typical); default is 60 s.
- *   You can change SAVEINT via command if you want. :contentReference[oaicite:2]{index=2}
+ *   You can change SAVEINT via command if you want.
  */
 
 #include <Arduino.h>
@@ -307,7 +307,7 @@ void setup() {
   pinMode(PIN_LED_85V, OUTPUT);
 
   attachInterrupt(digitalPinToInterrupt(PIN_LOCK), lockISR, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(PIN_PPS),  ppsISR,  RISING); // edge mode per Arduino ref :contentReference[oaicite:2]{index=2}
+  attachInterrupt(digitalPinToInterrupt(PIN_PPS),  ppsISR,  RISING); // edge mode per Arduino ref
 
   rtc.begin();
   if (nvtime.epoch > 0) rtc.setEpoch(nvtime.epoch);
