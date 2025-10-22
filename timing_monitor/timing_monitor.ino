@@ -65,10 +65,7 @@ void dumpStatus() {
   float v12 = readVoltage(PIN_SENSE_12V, SCALE_12);
   float v6 = readVoltage(PIN_SENSE_6V,  SCALE_6);
   float v9 = readVoltage(PIN_SENSE_9V, SCALE_9);
-  v9 = v9*8.65994468 - 26.8212562;
-  if( v9 < 0 ) {
-    v9 = 0.0;
-  }
+  
   Serial.print(F("Epoch: ")); Serial.println(rtc.getEpoch());
   Serial.print(F("12V: ")); Serial.print(v12,3);
   Serial.println("");
