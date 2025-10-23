@@ -51,6 +51,7 @@ void printHelp() {
   Serial.println(F(
     "\nCommands:"
     "\n  HELP or ?"
+    "\n  VERSION"
     "\n  STATUS"
     "\n  TIME SET YYYY-MM-DD HH:MM:SS"
     "\n  TIME SET EPOCH <sec>"
@@ -58,6 +59,13 @@ void printHelp() {
     "\n  BYPASS ON [baud]   (escape '+++exit')"
     "\n  BYPASS OFF"
     "\n  RESET"
+  ));
+}
+
+void printVersion() {
+  Serial.println(F(
+    "Timestamp:" __TIMESTAMP__ "\n"
+    "Compiled: " __DATE__ " " __TIME__ "\n"
   ));
 }
 
@@ -86,6 +94,10 @@ void parseLine(String s) {
 
   if( s.equals("HELP") || s.equals("?")) {
     printHelp();
+    return;
+  }
+  if( s.equals("VERSION")) {
+    printVersion();
     return;
   }
   if( s.equals("STATUS") ) {
@@ -180,7 +192,7 @@ void loop() {
       static String esc;
       char c = (char)Serial.read();
       esc += c;
-      if( esc.endsWith("+++exit") ) {
+      if( esc.endsWith("+++exit") || esc.endsWith("+++EXIT") ) {
         inBypass=false;
         Serial.println(F("\nOK: exit bypass"));
         esc="";
