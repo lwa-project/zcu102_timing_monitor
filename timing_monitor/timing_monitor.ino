@@ -82,26 +82,27 @@ void parseLine(String s) {
   if( s.length() == 0) {
     return;
   }
+  s.toUpperCase();
 
-  if( s.equalsIgnoreCase("HELP") || s.equalsIgnoreCase("?")) {
+  if( s.equals("HELP") || s.equals("?")) {
     printHelp();
     return;
   }
-  if( s.equalsIgnoreCase("STATUS") ) {
+  if( s.equals("STATUS") ) {
     dumpStatus();
     return;
   }
-  if( s.equalsIgnoreCase("TIME GET") ) {
+  if( s.equals("TIME GET") ) {
     Serial.print(F("EPOCH "));
     Serial.println(rtc.getEpoch());
     return;
   }
-  if( s.equalsIgnoreCase("BYPASS OFF") ) {
+  if( s.equals("BYPASS OFF") ) {
     inBypass=false;
     Serial.println(F("OK: bypass off"));
     return;
   }
-  if( s.equalsIgnoreCase("RESET") ) {
+  if( s.equals("RESET") ) {
     Serial.println(F("Resetting..."));
     delay(50);
     NVIC_SystemReset();
