@@ -6630,16 +6630,6 @@
 	)
 	(wire
 		(pts
-			(xy 129.54 50.8) (xy 130.81 50.8)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "34bf1728-9861-42d9-ac6b-627d1a91e566")
-	)
-	(wire
-		(pts
 			(xy 26.67 144.78) (xy 29.21 144.78)
 		)
 		(stroke
@@ -6967,6 +6957,16 @@
 			(type default)
 		)
 		(uuid "4c8417f0-89b0-474b-88d1-c86cbb9ba9b2")
+	)
+	(wire
+		(pts
+			(xy 143.51 50.8) (xy 144.78 50.8)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4d306c1b-d489-43aa-a711-91c4ff66a0d2")
 	)
 	(wire
 		(pts
@@ -9113,6 +9113,28 @@
 		)
 		(uuid "e81b5cc3-3a16-4fb0-932b-36a0e91ef251")
 	)
+	(global_label "Lock"
+		(shape output)
+		(at 144.78 50.8 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "04d7d0d0-ebe8-453b-8c2a-579bdd570084")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 151.4048 50.8 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+	)
 	(global_label "TXD"
 		(shape output)
 		(at 331.47 209.55 180)
@@ -9487,7 +9509,7 @@
 			)
 		)
 	)
-	(global_label "L0"
+	(global_label "L1"
 		(shape input)
 		(at 129.54 43.18 180)
 		(fields_autoplaced yes)
@@ -9685,7 +9707,7 @@
 			)
 		)
 	)
-	(global_label "L1"
+	(global_label "L0"
 		(shape input)
 		(at 144.78 43.18 0)
 		(fields_autoplaced yes)
@@ -9839,7 +9861,7 @@
 			)
 		)
 	)
-	(global_label "L3"
+	(global_label "L2"
 		(shape input)
 		(at 144.78 45.72 0)
 		(fields_autoplaced yes)
@@ -10099,28 +10121,6 @@
 					(size 1.27 1.27)
 				)
 				(justify left)
-				(hide yes)
-			)
-		)
-	)
-	(global_label "Lock"
-		(shape output)
-		(at 129.54 50.8 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "af06e9bb-b537-44f9-8bba-82a1326d1864")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 122.9152 50.8 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
 				(hide yes)
 			)
 		)
@@ -10498,7 +10498,7 @@
 			)
 		)
 	)
-	(global_label "L2"
+	(global_label "L3"
 		(shape input)
 		(at 129.54 45.72 180)
 		(fields_autoplaced yes)
@@ -10843,71 +10843,6 @@
 			(project "TimingMonitor"
 				(path "/bff3a11c-5c3e-4e85-be1b-f17e04a494ce"
 					(reference "J8")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "power:GND")
-		(at 143.51 50.8 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(uuid "00000000-0000-0000-0000-0000614f9d99")
-		(property "Reference" "#PWR015"
-			(at 143.51 57.15 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Value" "GND"
-			(at 143.637 55.1942 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
-			(at 143.51 50.8 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" ""
-			(at 143.51 50.8 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" ""
-			(at 143.51 50.8 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "1dcc458a-9797-4217-b43a-0744d911acf0")
-		)
-		(instances
-			(project "TimingMonitor"
-				(path "/bff3a11c-5c3e-4e85-be1b-f17e04a494ce"
-					(reference "#PWR015")
 					(unit 1)
 				)
 			)
@@ -17829,6 +17764,71 @@
 			(project "TimingMonitor2"
 				(path "/bff3a11c-5c3e-4e85-be1b-f17e04a494ce"
 					(reference "R20")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 130.81 50.8 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "ba447787-97d5-4b3a-b870-c822ed241cf8")
+		(property "Reference" "#PWR015"
+			(at 130.81 57.15 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 130.937 55.1942 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 130.81 50.8 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 130.81 50.8 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 130.81 50.8 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "13b1e817-5719-43bc-884a-70304f9e4f4e")
+		)
+		(instances
+			(project "TimingMonitor"
+				(path "/bff3a11c-5c3e-4e85-be1b-f17e04a494ce"
+					(reference "#PWR015")
 					(unit 1)
 				)
 			)
