@@ -27776,7 +27776,7 @@
 			(justify left bottom)
 		)
 	)
-	(gr_text "8\n7"
+	(gr_text "7\n8"
 		(at 148.38 135.4 0)
 		(layer "F.SilkS")
 		(uuid "933da3fa-2cf6-41cf-a677-9bdc61f637c5")
@@ -27866,7 +27866,7 @@
 			(justify left bottom)
 		)
 	)
-	(gr_text "2\n1"
+	(gr_text "1\n2"
 		(at 138.25 135.31 0)
 		(layer "F.SilkS")
 		(uuid "fb9ee95f-6110-4c82-abcf-adc04151728e")
