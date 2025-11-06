@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <RTCZero.h>
+#include <TemperatureZero.h>
 
 #define PIN_SENSE_12V A0
 #define PIN_SENSE_9V A1
@@ -14,6 +15,9 @@
 static const float SCALE_12 = (62.0f + 10.0f) / 10.0f;  // 7.2
 static const float SCALE_9 = (43.0f + 10.0f) / 10.0f;  // 5.3
 static const float SCALE_6  = (27.0f + 10.0f) / 10.0f;  // 3.7
+
+// Internal temperature sensor readout
+TemperatureZero MCU_TEMP = TemperatureZero();
 
 float readVoltage(uint8_t pin, float scale) {
   uint32_t acc = 0;
@@ -82,7 +86,8 @@ void dumpStatus() {
   Serial.print(F(" 6V: ")); Serial.print(v6,3);
   Serial.println("");
   Serial.print(F("Valon Lock: ")); Serial.println(lockState ? "HIGH" : "LOW");
-  Serial.print(F("Last Sync Pulse:")); Serial.print((micros()-lastSyncMicros)/1e6, 3); Serial.println(" s ago");
+  Serial.print(F("Last Sync Pulse: ")); Serial.print((micros()-lastSyncMicros)/1e6, 3); Serial.println(" s ago");
+  Serial.print(F("MCU Temperature: ")); Serial.print(MCU_TEMP.readInternalTemperature()); Serial.println(" C");
 }
 
 void parseLine(String s) {
@@ -165,6 +170,22 @@ void parseLine(String s) {
 
 // ---------- Setup & loop ----------
 void setup() {
+  // Setup BOD33 - the brown out detector
+  // See https://blog.thea.codes/sam-d21-brown-out-detector/ for details
+  SYSCTRL->BOD33.bit.ENABLE = 0;
+  while( !SYSCTRL->PCLKSR.bit.B33SRDY ) {};
+  SYSCTRL->BOD33.reg = SYSCTRL_BOD33_LEVEL(48) \
+                       | SYSCTRL_BOD33_ACTION_NONE \
+                       | SYSCTRL_BOD33_HYST;
+  SYSCTRL->BOD33.bit.ENABLE = 1;
+  while( !SYSCTRL->PCLKSR.bit.BOD33RDY ) {};
+  while( SYSCTRL->PCLKSR.bit.BOD33DET ) {};
+
+  SYSCTRL->BOD33.bit.ENABLE = 0;
+  while( !SYSCTRL->PCLKSR.bit.B33SRDY ) {};
+  SYSCTRL->BOD33.reg |= SYSCTRL_BOD33_ACTION_RESET;
+  SYSCTRL->BOD33.bit.ENABLE = 1;
+
   Serial.begin(9600);
   while (!Serial && millis() < 4000) { }
 
@@ -180,6 +201,8 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(PIN_SYNC), syncISR, RISING);
 
   rtc.begin();
+
+  MCU_TEMP.init();
 
   printHelp();
 }
