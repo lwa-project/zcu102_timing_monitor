@@ -9056,6 +9056,25 @@
 		)
 		(uuid "4e308af4-fbd6-4caa-9fe2-7823a5477f13")
 	)
+	(text_box "Valon Cable Parts:\nHousing - HiRose DF11-8DS-2C x2\nWires - HiRose/Digikey H3BBT-10112-B8 x6"
+		(exclude_from_sim no)
+		(at 115.57 68.58 0)
+		(size 46.99 8.89)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(fill
+			(type none)
+		)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "6919b5a4-053b-4300-a4c3-290ae53737f1")
+	)
 	(text_box "9V - Splitter:\n >7.5V and <12V\n\nR1: 1.2M, R2: 56k, R3: 150k\nV_low: 7.97 +/- 0.09\nV_high: 11.51 +/- 0.14"
 		(exclude_from_sim no)
 		(at 162.56 199.39 0)
@@ -9093,6 +9112,25 @@
 			(justify left top)
 		)
 		(uuid "841520cd-24ab-45cf-b8f2-a6e8e3a51418")
+	)
+	(text_box "LEDs:\nKingbright WP7113CGDK"
+		(exclude_from_sim no)
+		(at 67.31 68.58 0)
+		(size 27.94 6.35)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(fill
+			(type none)
+		)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "ac1b6b27-f1f4-49a7-a819-4b28a14ed5f1")
 	)
 	(text_box "6V - Valon:\n>5V and <8V\n\nR1: 2.7M, R2: 220k, R3: 560k\nV_low: 5.21 +/- 0.05\nV_high: 7.63 +/- 0.09"
 		(exclude_from_sim no)
