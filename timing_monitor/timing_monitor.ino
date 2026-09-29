@@ -1,13 +1,13 @@
 #include <Arduino.h>
-#include <RTCZero.h>
-#include <TemperatureZero.h>
+#include "hardware/rtc.h"
+#include <time.h>
 
 #define PIN_SENSE_12V A0
 #define PIN_SENSE_9V A1
 #define PIN_SENSE_6V A2
 
-#define PIN_LOCK A3
-#define PIN_SYNC A4
+#define PIN_LOCK D3
+#define PIN_SYNC D4
 
 #define PIN_NOT_FAULT D5
 
@@ -15,9 +15,6 @@
 static const float SCALE_12 = (62.0f + 10.0f) / 10.0f;  // 7.2
 static const float SCALE_9 = (43.0f + 10.0f) / 10.0f;  // 5.3
 static const float SCALE_6  = (27.0f + 10.0f) / 10.0f;  // 3.7
-
-// Internal temperature sensor readout
-TemperatureZero MCU_TEMP = TemperatureZero();
 
 float readVoltage(uint8_t pin, float scale) {
   uint32_t acc = 0;
@@ -46,10 +43,48 @@ void syncISR() {
   syncSeen = true;
 }
 
-RTCZero rtc;
 bool inBypass = false;
 unsigned long tSense = 0;
 String rxLine;
+
+uint32_t getEpoch() {
+  datetime_t t;
+  if(!rtc_get_datetime(&t)) {
+    return 0;
+  }
+
+  struct tm timeinfo = {0};
+  timeinfo.tm_year = t.year - 1900; // Years since 1900
+  timeinfo.tm_mon  = t.month - 1;   // Month is 0 - 11
+  timeinfo.tm_mday = t.day;
+  timeinfo.tm_hour = t.hour;
+  timeinfo.tm_min  = t.min;
+  timeinfo.tm_sec  = t.sec;
+  timeinfo.tm_isdst = -1;           // Disregard DST adjustments
+
+  return (uint32_t) mktime(&timeinfo);
+}
+
+int getDayOfWeek(int Y, int M, int D) {
+  int adjustment = M < 3 ? 1 : 0;
+  int yy = Y - adjustment;
+  return (D + (13 * (M+ 1 + 2 * adjustment) / 5) + yy + (yy / 4) - (yy / 100) + (yy / 400)) % 7;
+}
+
+void setEpoch(uint32_t e) {
+  time_t epoch_t = (time_t) e;
+  struct tm *ti = gmtime(&epoch_t);
+
+  datetime_t t = {.year  = (int16_t) (ti->tm_year + 1900),
+                  .month = (int8_t) (ti->tm_mon + 1),
+                  .day   = (int8_t) ti->tm_mday,
+                  .dotw  = (int8_t) ti->tm_wday,
+                  .hour  = (int8_t) ti->tm_hour,
+                  .min   = (int8_t) ti->tm_min,
+                  .sec   = (int8_t) ti->tm_sec
+                 };
+    rtc_set_datetime(&t);
+}
 
 void printHelp() {
   Serial.println(F(
@@ -78,7 +113,7 @@ void dumpStatus() {
   float v6 = readVoltage(PIN_SENSE_6V,  SCALE_6);
   float v9 = readVoltage(PIN_SENSE_9V, SCALE_9);
   
-  Serial.print(F("Epoch: ")); Serial.println(rtc.getEpoch());
+  Serial.print(F("Epoch: ")); Serial.println(getEpoch());
   Serial.print(F("12V: ")); Serial.print(v12,3);
   Serial.println("");
   Serial.print(F(" 9V: ")); Serial.print(v9,3);
@@ -87,7 +122,7 @@ void dumpStatus() {
   Serial.println("");
   Serial.print(F("Valon Lock: ")); Serial.println(lockState ? "HIGH" : "LOW");
   Serial.print(F("Last Sync Pulse: ")); Serial.print((micros()-lastSyncMicros)/1e6, 3); Serial.println(" s ago");
-  Serial.print(F("MCU Temperature: ")); Serial.print(MCU_TEMP.readInternalTemperature()); Serial.println(" C");
+  Serial.print(F("MCU Temperature: ")); Serial.print(analogReadTemp()); Serial.println(" C");
 }
 
 void parseLine(String s) {
@@ -111,7 +146,7 @@ void parseLine(String s) {
   }
   if( s.equals("TIME GET") ) {
     Serial.print(F("EPOCH "));
-    Serial.println(rtc.getEpoch());
+    Serial.println(getEpoch());
     return;
   }
   if( s.equals("BYPASS OFF") ) {
@@ -122,7 +157,7 @@ void parseLine(String s) {
   if( s.equals("RESET") ) {
     Serial.println(F("Resetting..."));
     delay(50);
-    NVIC_SystemReset();
+    rp2040.reboot();
     return;
   }
 
@@ -145,7 +180,7 @@ void parseLine(String s) {
   if (s.startsWith("TIME SET EPOCH")) {
     unsigned long ep=0;
     if( sscanf(s.c_str(), "TIME SET EPOCH %lu", &ep) == 1 ) {
-      rtc.setEpoch(ep); Serial.println(F("OK"));
+      setEpoch(ep); Serial.println(F("OK"));
     } else {
       Serial.println(F("ERR"));
     }
@@ -156,8 +191,15 @@ void parseLine(String s) {
     // TIME SET YYYY-MM-DD HH:MM:SS
     int Y,M,D,h,m; int s2;
     if( sscanf(s.c_str(), "TIME SET %d-%d-%d %d:%d:%d", &Y,&M,&D,&h,&m,&s2) == 6 ) {
-      rtc.setYear((uint8_t)(Y-2000)); rtc.setMonth(M); rtc.setDay(D);
-      rtc.setHours(h); rtc.setMinutes(m); rtc.setSeconds(s2);
+      datetime_t t = {.year  = (int16_t) Y,
+                      .month = (int8_t) M,
+                      .day   = (int8_t) D,
+                      .dotw  = (int8_t) getDayOfWeek(Y, M, D),
+                      .hour  = (int8_t) h,
+                      .min   = (int8_t) m,
+                      .sec   = (int8_t) s2
+                     };
+      rtc_set_datetime(&t);
       Serial.println(F("OK"));
     } else {
       Serial.println(F("ERR"));
@@ -170,21 +212,8 @@ void parseLine(String s) {
 
 // ---------- Setup & loop ----------
 void setup() {
-  // Setup BOD33 - the brown out detector
-  // See https://blog.thea.codes/sam-d21-brown-out-detector/ for details
-  SYSCTRL->BOD33.bit.ENABLE = 0;
-  while( !SYSCTRL->PCLKSR.bit.B33SRDY ) {};
-  SYSCTRL->BOD33.reg = SYSCTRL_BOD33_LEVEL(48) \
-                       | SYSCTRL_BOD33_ACTION_NONE \
-                       | SYSCTRL_BOD33_HYST;
-  SYSCTRL->BOD33.bit.ENABLE = 1;
-  while( !SYSCTRL->PCLKSR.bit.BOD33RDY ) {};
-  while( SYSCTRL->PCLKSR.bit.BOD33DET ) {};
-
-  SYSCTRL->BOD33.bit.ENABLE = 0;
-  while( !SYSCTRL->PCLKSR.bit.B33SRDY ) {};
-  SYSCTRL->BOD33.reg |= SYSCTRL_BOD33_ACTION_RESET;
-  SYSCTRL->BOD33.bit.ENABLE = 1;
+  // Setup the watchdor
+  rp2040.wdt_begin(8000);
 
   Serial.begin(9600);
   while (!Serial && millis() < 4000) { }
@@ -200,9 +229,16 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(PIN_LOCK), lockISR, CHANGE);
   attachInterrupt(digitalPinToInterrupt(PIN_SYNC), syncISR, RISING);
 
-  rtc.begin();
-
-  MCU_TEMP.init();
+  rtc_init();
+  datetime_t t = {.year  = 1970,
+                  .month = 1,
+                  .day   = 1,
+                  .dotw  = (int8_t) getDayOfWeek(1970, 1, 1),
+                  .hour  = 0,
+                  .min   = 0,
+                  .sec   = 0
+                 };
+  rtc_set_datetime(&t);
 
   printHelp();
 }
@@ -251,4 +287,7 @@ void loop() {
       }
     }
   }
+
+  // Reset the watchdog
+  rp2040.wdt_reset();
 }
