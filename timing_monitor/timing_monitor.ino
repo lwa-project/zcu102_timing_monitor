@@ -11,12 +11,50 @@
 
 #define PIN_NOT_FAULT D5
 
+// Activity LED pins (on-board user RGB LED, active low)
+#define USB_LED_PIN PIN_LED_G
+#define BUS_LED_PIN PIN_LED_B
+#define ACT_LED_ON LOW
+#define ACT_LED_OFF HIGH
+
+// Minimum time in ms an activity LED stays lit
+#define ACT_LED_HOLD_MS 50
+
+// Timeout in ms before flushing the command input buffer (when not in bypass mode)
+#define CMD_TIMEOUT_MS 150
+
+// Control variables
+uint8_t usb_led = 0, bus_led = 0;
+unsigned long usb_led_time = 0, bus_led_time = 0;
+
+void usb_activity() {
+  // Flash the USB activity LED, unless bus activity is already being shown
+  usb_led_time = millis();
+  if( !bus_led && !usb_led ) {
+    digitalWrite(USB_LED_PIN, ACT_LED_ON);
+    usb_led = 1;
+  }
+}
+
+void bus_activity() {
+  // Flash the bus activity LED, which takes precedence over USB activity
+  bus_led_time = millis();
+  if( usb_led ) {
+    digitalWrite(USB_LED_PIN, ACT_LED_OFF);
+    usb_led = 0;
+  }
+  if( !bus_led ) {
+    digitalWrite(BUS_LED_PIN, ACT_LED_ON);
+    bus_led = 1;
+  }
+}
+
 // Divider scale factors: Vrail = Vadc * (Rtop+Rbot)/Rbot
 static const float SCALE_12 = (62.0f + 10.0f) / 10.0f;  // 7.2
 static const float SCALE_9 = (43.0f + 10.0f) / 10.0f;  // 5.3
 static const float SCALE_6  = (27.0f + 10.0f) / 10.0f;  // 3.7
 
-float readVoltage(uint8_t pin, float scale) {
+float read_voltage(uint8_t pin, float scale) {
   uint32_t acc = 0;
   for(uint8_t i=0; i<16; ++i) {
     acc += analogRead(pin);
@@ -28,7 +66,7 @@ float readVoltage(uint8_t pin, float scale) {
 
 volatile bool lockState = false;
 
-void lockISR() {
+void lock_isr() {
   bool s = digitalRead(PIN_LOCK);
   if( s != lockState ) {
     lockState = s;
@@ -38,16 +76,17 @@ void lockISR() {
 volatile uint32_t lastSyncMicros = 0;
 volatile bool syncSeen = false;
 
-void syncISR() {
+void sync_isr() {
   lastSyncMicros = micros();
   syncSeen = true;
 }
 
 bool inBypass = false;
 unsigned long tSense = 0;
-String rxLine;
+long int last_char = -1;
+String cmd;
 
-uint32_t getEpoch() {
+uint32_t get_epoch() {
   datetime_t t;
   if(!rtc_get_datetime(&t)) {
     return 0;
@@ -65,13 +104,13 @@ uint32_t getEpoch() {
   return (uint32_t) mktime(&timeinfo);
 }
 
-int getDayOfWeek(int Y, int M, int D) {
+int get_day_of_week(int Y, int M, int D) {
   int adjustment = M < 3 ? 1 : 0;
   int yy = Y - adjustment;
   return (D + (13 * (M+ 1 + 2 * adjustment) / 5) + yy + (yy / 4) - (yy / 100) + (yy / 400)) % 7;
 }
 
-void setEpoch(uint32_t e) {
+void set_epoch(uint32_t e) {
   time_t epoch_t = (time_t) e;
   struct tm *ti = gmtime(&epoch_t);
 
@@ -84,6 +123,23 @@ void setEpoch(uint32_t e) {
                   .sec   = (int8_t) ti->tm_sec
                  };
     rtc_set_datetime(&t);
+}
+
+String get_reset_reason() {
+  RP2040::resetReason_t reason = rp2040.getResetReason();
+  
+  String explain = "unknown";
+  if (reason == RP2040::PWRON_RESET) {
+    // Power on and brown out are merged on the RP2040
+    explain = "power on or brown out";
+  } else if (reason == RP2040::RUN_PIN_RESET) {
+    explain = "RUN pin triggered";
+  } else if (reason == RP2040::SOFT_RESET) {
+    explain = "software";
+  } else if (reason == RP2040::WDT_RESET) {
+    explain = "watchdog";
+  }
+  return explain;
 }
 
 void printHelp() {
@@ -109,11 +165,11 @@ void printVersion() {
 }
 
 void dumpStatus() {
-  float v12 = readVoltage(PIN_SENSE_12V, SCALE_12);
-  float v6 = readVoltage(PIN_SENSE_6V,  SCALE_6);
-  float v9 = readVoltage(PIN_SENSE_9V, SCALE_9);
+  float v12 = read_voltage(PIN_SENSE_12V, SCALE_12);
+  float v6 = read_voltage(PIN_SENSE_6V,  SCALE_6);
+  float v9 = read_voltage(PIN_SENSE_9V, SCALE_9);
   
-  Serial.print(F("Epoch: ")); Serial.println(getEpoch());
+  Serial.print(F("Epoch: ")); Serial.println(get_epoch());
   Serial.print(F("12V: ")); Serial.print(v12,3);
   Serial.println("");
   Serial.print(F(" 9V: ")); Serial.print(v9,3);
@@ -123,6 +179,7 @@ void dumpStatus() {
   Serial.print(F("Valon Lock: ")); Serial.println(lockState ? "HIGH" : "LOW");
   Serial.print(F("Last Sync Pulse: ")); Serial.print((micros()-lastSyncMicros)/1e6, 3); Serial.println(" s ago");
   Serial.print(F("MCU Temperature: ")); Serial.print(analogReadTemp()); Serial.println(" C");
+  Serial.print(F("MCU Last Reset: ")); Serial.println(get_reset_reason());
 }
 
 void parseLine(String s) {
@@ -146,7 +203,7 @@ void parseLine(String s) {
   }
   if( s.equals("TIME GET") ) {
     Serial.print(F("EPOCH "));
-    Serial.println(getEpoch());
+    Serial.println(get_epoch());
     return;
   }
   if( s.equals("BYPASS OFF") ) {
@@ -180,7 +237,7 @@ void parseLine(String s) {
   if (s.startsWith("TIME SET EPOCH")) {
     unsigned long ep=0;
     if( sscanf(s.c_str(), "TIME SET EPOCH %lu", &ep) == 1 ) {
-      setEpoch(ep); Serial.println(F("OK"));
+      set_epoch(ep); Serial.println(F("OK"));
     } else {
       Serial.println(F("ERR"));
     }
@@ -194,7 +251,7 @@ void parseLine(String s) {
       datetime_t t = {.year  = (int16_t) Y,
                       .month = (int8_t) M,
                       .day   = (int8_t) D,
-                      .dotw  = (int8_t) getDayOfWeek(Y, M, D),
+                      .dotw  = (int8_t) get_day_of_week(Y, M, D),
                       .hour  = (int8_t) h,
                       .min   = (int8_t) m,
                       .sec   = (int8_t) s2
@@ -226,19 +283,25 @@ void setup() {
   pinMode(PIN_NOT_FAULT, OUTPUT);
   digitalWrite(PIN_NOT_FAULT, 1);
 
-  attachInterrupt(digitalPinToInterrupt(PIN_LOCK), lockISR, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(PIN_SYNC), syncISR, RISING);
+  attachInterrupt(digitalPinToInterrupt(PIN_LOCK), lock_isr, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(PIN_SYNC), sync_isr, RISING);
 
   rtc_init();
   datetime_t t = {.year  = 1970,
                   .month = 1,
                   .day   = 1,
-                  .dotw  = (int8_t) getDayOfWeek(1970, 1, 1),
+                  .dotw  = (int8_t) get_day_of_week(1970, 1, 1),
                   .hour  = 0,
                   .min   = 0,
                   .sec   = 0
                  };
   rtc_set_datetime(&t);
+
+  // LEDs
+  pinMode(USB_LED_PIN, OUTPUT);  // USB activity
+  pinMode(BUS_LED_PIN, OUTPUT);  // Bus activity
+  digitalWrite(USB_LED_PIN, ACT_LED_OFF);
+  digitalWrite(BUS_LED_PIN, ACT_LED_OFF);
 
   printHelp();
 }
@@ -250,6 +313,8 @@ void loop() {
       // escape sequence support
       static String esc;
       char c = (char)Serial.read();
+      usb_activity();
+      bus_activity();
       esc += c;
       if( esc.endsWith("+++exit") || esc.endsWith("+++EXIT") ) {
         inBypass=false;
@@ -267,17 +332,25 @@ void loop() {
     // CLI line reader
     while( Serial.available() ) {
       char c = (char)Serial.read();
+      last_char = millis();
+      usb_activity();
       if( c == '\r' ) {
         continue;
       }
       if( c == '\n' ) {
-        parseLine(rxLine); rxLine="";
+        parseLine(cmd);
+        cmd="";
       } else {
-        rxLine += c;
+        cmd += c;
       }
     }
+
+    // Clear out any dangling text in the command buffer
+    if (cmd.length() != 0 && millis() - last_char > CMD_TIMEOUT_MS) {
+      cmd = "";
+    }
   }
-  
+
   // Periodic refreshing of sync pulse state
   if (millis() - tSense >= 1000) {
     tSense = millis();
@@ -286,6 +359,16 @@ void loop() {
         syncSeen = false;
       }
     }
+  }
+
+  // Turn off the activity LEDs once their hold time has passed
+  if( usb_led && (millis() - usb_led_time) > ACT_LED_HOLD_MS ) {
+    digitalWrite(USB_LED_PIN, ACT_LED_OFF);
+    usb_led = 0;
+  }
+  if( bus_led && (millis() - bus_led_time) > ACT_LED_HOLD_MS ) {
+    digitalWrite(BUS_LED_PIN, ACT_LED_OFF);
+    bus_led = 0;
   }
 
   // Reset the watchdog
