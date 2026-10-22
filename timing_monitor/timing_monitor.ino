@@ -21,7 +21,7 @@
 #define ACT_LED_HOLD_MS 50
 
 // Timeout in ms before flushing the command input buffer (when not in bypass mode)
-#define CMD_TIMEOUT_MS 150
+#define CMD_TIMEOUT_MS 2000
 
 // Control variables
 uint8_t usb_led = 0, bus_led = 0;
@@ -104,12 +104,6 @@ uint32_t get_epoch() {
   return (uint32_t) mktime(&timeinfo);
 }
 
-int get_day_of_week(int Y, int M, int D) {
-  int adjustment = M < 3 ? 1 : 0;
-  int yy = Y - adjustment;
-  return (D + (13 * (M+ 1 + 2 * adjustment) / 5) + yy + (yy / 4) - (yy / 100) + (yy / 400)) % 7;
-}
-
 void set_epoch(uint32_t e) {
   time_t epoch_t = (time_t) e;
   struct tm *ti = gmtime(&epoch_t);
@@ -122,7 +116,30 @@ void set_epoch(uint32_t e) {
                   .min   = (int8_t) ti->tm_min,
                   .sec   = (int8_t) ti->tm_sec
                  };
-    rtc_set_datetime(&t);
+  rtc_set_datetime(&t);
+}
+
+bool datetime_to_epoch(int Y, int M, int D, int h, int m, int s, uint32_t *epoch) {
+  struct tm timeinfo = {0};
+  timeinfo.tm_year = Y - 1900;
+  timeinfo.tm_mon  = M - 1;
+  timeinfo.tm_mday = D;
+  timeinfo.tm_hour = h;
+  timeinfo.tm_min  = m;
+  timeinfo.tm_sec  = s;
+  timeinfo.tm_isdst = -1;
+
+  // mktime() normalizes out-of-range fields (e.g., Feb 30 -> Mar 2), so if
+  // anything changed the input wasn't a real date/time
+  time_t e = mktime(&timeinfo);
+  if( e < 0 || timeinfo.tm_year != Y - 1900 || timeinfo.tm_mon != M - 1
+      || timeinfo.tm_mday != D || timeinfo.tm_hour != h
+      || timeinfo.tm_min != m || timeinfo.tm_sec != s ) {
+    return false;
+  }
+
+  *epoch = (uint32_t) e;
+  return true;
 }
 
 String get_reset_reason() {
@@ -247,16 +264,10 @@ void parseLine(String s) {
   if (s.startsWith("TIME SET ")) {
     // TIME SET YYYY-MM-DD HH:MM:SS
     int Y,M,D,h,m; int s2;
-    if( sscanf(s.c_str(), "TIME SET %d-%d-%d %d:%d:%d", &Y,&M,&D,&h,&m,&s2) == 6 ) {
-      datetime_t t = {.year  = (int16_t) Y,
-                      .month = (int8_t) M,
-                      .day   = (int8_t) D,
-                      .dotw  = (int8_t) get_day_of_week(Y, M, D),
-                      .hour  = (int8_t) h,
-                      .min   = (int8_t) m,
-                      .sec   = (int8_t) s2
-                     };
-      rtc_set_datetime(&t);
+    uint32_t ep;
+    if( sscanf(s.c_str(), "TIME SET %d-%d-%d %d:%d:%d", &Y,&M,&D,&h,&m,&s2) == 6
+        && datetime_to_epoch(Y, M, D, h, m, s2, &ep) ) {
+      set_epoch(ep);
       Serial.println(F("OK"));
     } else {
       Serial.println(F("ERR"));
@@ -269,33 +280,30 @@ void parseLine(String s) {
 
 // ---------- Setup & loop ----------
 void setup() {
-  // Setup the watchdor
+  // Setup the watchdog
   rp2040.wdt_begin(8000);
 
+  // Serial setup
   Serial.begin(9600);
   while (!Serial && millis() < 4000) { }
 
+  // Setup the ADC resolution
   analogReadResolution(12);
 
+  // Set pins
   pinMode(PIN_LOCK, INPUT_PULLDOWN);
   pinMode(PIN_SYNC, INPUT_PULLDOWN);
 
   pinMode(PIN_NOT_FAULT, OUTPUT);
   digitalWrite(PIN_NOT_FAULT, 1);
 
+  // Attached the interrupts
   attachInterrupt(digitalPinToInterrupt(PIN_LOCK), lock_isr, CHANGE);
   attachInterrupt(digitalPinToInterrupt(PIN_SYNC), sync_isr, RISING);
 
+  // Setup the RTC
   rtc_init();
-  datetime_t t = {.year  = 1970,
-                  .month = 1,
-                  .day   = 1,
-                  .dotw  = (int8_t) get_day_of_week(1970, 1, 1),
-                  .hour  = 0,
-                  .min   = 0,
-                  .sec   = 0
-                 };
-  rtc_set_datetime(&t);
+  set_epoch(0);
 
   // LEDs
   pinMode(USB_LED_PIN, OUTPUT);  // USB activity
@@ -314,7 +322,6 @@ void loop() {
       static String esc;
       char c = (char)Serial.read();
       usb_activity();
-      bus_activity();
       esc += c;
       if( esc.endsWith("+++exit") || esc.endsWith("+++EXIT") ) {
         inBypass=false;
@@ -323,9 +330,11 @@ void loop() {
         break;
       }
       Serial1.write(c);
+      bus_activity();
     }
     while( Serial1.available() ) {
       Serial.write(Serial1.read());
+      bus_activity();
     }
     // Keep logging via ISRs even in bypass
   } else {
