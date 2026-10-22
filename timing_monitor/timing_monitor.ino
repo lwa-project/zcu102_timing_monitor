@@ -76,16 +76,13 @@ void lock_isr() {
   }
 }
 
-volatile uint32_t last_sync_micros = 0;
-volatile bool sync_seen = false;
+volatile uint64_t last_sync_us = 0;
 
 void sync_isr() {
-  last_sync_micros = micros();
-  sync_seen = true;
+  last_sync_us = time_us_64();
 }
 
 bool in_bypass = false;
-unsigned long t_sense = 0;
 long int last_char = -1;
 String cmd;
 bool cmd_overflow = false;
@@ -189,7 +186,12 @@ void dump_status() {
   float v12 = read_voltage(PIN_SENSE_12V, SCALE_12);
   float v6 = read_voltage(PIN_SENSE_6V,  SCALE_6);
   float v9 = read_voltage(PIN_SENSE_9V, SCALE_9);
-  
+
+  // 64-bit reads aren't atomic on the M0+ so copy with the ISR held off
+  noInterrupts();
+  uint64_t last_sync = last_sync_us;
+  interrupts();
+
   Serial.print(F("Epoch: ")); Serial.println(get_epoch());
   Serial.print(F("12V: ")); Serial.print(v12,3);
   Serial.println("");
@@ -198,7 +200,7 @@ void dump_status() {
   Serial.print(F(" 6V: ")); Serial.print(v6,3);
   Serial.println("");
   Serial.print(F("Valon Lock: ")); Serial.println(lock_state ? "HIGH" : "LOW");
-  Serial.print(F("Last Sync Pulse: ")); Serial.print((micros()-last_sync_micros)/1e6, 3); Serial.println(" s ago");
+  Serial.print(F("Last Sync Pulse: ")); Serial.print((time_us_64()-last_sync)/1e6, 3); Serial.println(" s ago");
   Serial.print(F("MCU Temperature: ")); Serial.print(analogReadTemp()); Serial.println(" C");
   Serial.print(F("MCU Last Reset: ")); Serial.println(get_reset_reason());
 }
@@ -361,16 +363,6 @@ void loop() {
     if (cmd.length() != 0 && millis() - last_char > CMD_TIMEOUT_MS) {
       cmd = "";
       cmd_overflow = false;
-    }
-  }
-
-  // Periodic refreshing of sync pulse state
-  if (millis() - t_sense >= 1000) {
-    t_sense = millis();
-    if( sync_seen ) {
-      if( ((micros() - last_sync_micros)/1e6) > 6 ) {
-        sync_seen = false;
-      }
     }
   }
 
