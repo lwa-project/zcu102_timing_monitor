@@ -64,25 +64,25 @@ float read_voltage(uint8_t pin, float scale) {
   return vadc * scale;
 }
 
-volatile bool lockState = false;
+volatile bool lock_state = false;
 
 void lock_isr() {
   bool s = digitalRead(PIN_LOCK);
-  if( s != lockState ) {
-    lockState = s;
+  if( s != lock_state ) {
+    lock_state = s;
   }
 }
 
-volatile uint32_t lastSyncMicros = 0;
-volatile bool syncSeen = false;
+volatile uint32_t last_sync_micros = 0;
+volatile bool sync_seen = false;
 
 void sync_isr() {
-  lastSyncMicros = micros();
-  syncSeen = true;
+  last_sync_micros = micros();
+  sync_seen = true;
 }
 
-bool inBypass = false;
-unsigned long tSense = 0;
+bool in_bypass = false;
+unsigned long t_sense = 0;
 long int last_char = -1;
 String cmd;
 
@@ -159,7 +159,7 @@ String get_reset_reason() {
   return explain;
 }
 
-void printHelp() {
+void print_help() {
   Serial.println(F(
     "\nCommands:"
     "\n  HELP or ?"
@@ -174,14 +174,14 @@ void printHelp() {
   ));
 }
 
-void printVersion() {
+void print_version() {
   Serial.println(F(
     "Timestamp:" __TIMESTAMP__ "\n"
     "Compiled: " __DATE__ " " __TIME__ "\n"
   ));
 }
 
-void dumpStatus() {
+void dump_status() {
   float v12 = read_voltage(PIN_SENSE_12V, SCALE_12);
   float v6 = read_voltage(PIN_SENSE_6V,  SCALE_6);
   float v9 = read_voltage(PIN_SENSE_9V, SCALE_9);
@@ -193,89 +193,10 @@ void dumpStatus() {
   Serial.println("");
   Serial.print(F(" 6V: ")); Serial.print(v6,3);
   Serial.println("");
-  Serial.print(F("Valon Lock: ")); Serial.println(lockState ? "HIGH" : "LOW");
-  Serial.print(F("Last Sync Pulse: ")); Serial.print((micros()-lastSyncMicros)/1e6, 3); Serial.println(" s ago");
+  Serial.print(F("Valon Lock: ")); Serial.println(lock_state ? "HIGH" : "LOW");
+  Serial.print(F("Last Sync Pulse: ")); Serial.print((micros()-last_sync_micros)/1e6, 3); Serial.println(" s ago");
   Serial.print(F("MCU Temperature: ")); Serial.print(analogReadTemp()); Serial.println(" C");
   Serial.print(F("MCU Last Reset: ")); Serial.println(get_reset_reason());
-}
-
-void parseLine(String s) {
-  s.trim();
-  if( s.length() == 0) {
-    return;
-  }
-  s.toUpperCase();
-
-  if( s.equals("HELP") || s.equals("?")) {
-    printHelp();
-    return;
-  }
-  if( s.equals("VERSION")) {
-    printVersion();
-    return;
-  }
-  if( s.equals("STATUS") ) {
-    dumpStatus();
-    return;
-  }
-  if( s.equals("TIME GET") ) {
-    Serial.print(F("EPOCH "));
-    Serial.println(get_epoch());
-    return;
-  }
-  if( s.equals("BYPASS OFF") ) {
-    inBypass=false;
-    Serial.println(F("OK: bypass off"));
-    return;
-  }
-  if( s.equals("RESET") ) {
-    Serial.println(F("Resetting..."));
-    delay(50);
-    rp2040.reboot();
-    return;
-  }
-
-  if( s.startsWith("BYPASS ON") ) {
-    long baud = 115200;
-    int sp = s.indexOf(' ', 9);
-    if( sp > 0 ) {
-      baud = s.substring(sp+1).toInt();
-      if( baud <= 0 ) {
-        baud = 115200;
-      }
-    }
-    Serial1.begin(baud); // PB08/PB09 on XIAO
-    inBypass = true;
-    Serial.print(F("OK: bypass on @")); Serial.println(baud);
-    Serial.println(F("(escape with '+++exit')"));
-    return;
-  }
-
-  if (s.startsWith("TIME SET EPOCH")) {
-    unsigned long ep=0;
-    if( sscanf(s.c_str(), "TIME SET EPOCH %lu", &ep) == 1 ) {
-      set_epoch(ep); Serial.println(F("OK"));
-    } else {
-      Serial.println(F("ERR"));
-    }
-    return;
-  }
-
-  if (s.startsWith("TIME SET ")) {
-    // TIME SET YYYY-MM-DD HH:MM:SS
-    int Y,M,D,h,m; int s2;
-    uint32_t ep;
-    if( sscanf(s.c_str(), "TIME SET %d-%d-%d %d:%d:%d", &Y,&M,&D,&h,&m,&s2) == 6
-        && datetime_to_epoch(Y, M, D, h, m, s2, &ep) ) {
-      set_epoch(ep);
-      Serial.println(F("OK"));
-    } else {
-      Serial.println(F("ERR"));
-    }
-    return;
-  }
-
-  Serial.println(F("ERR: unknown (HELP)"));
 }
 
 // ---------- Setup & loop ----------
@@ -297,7 +218,7 @@ void setup() {
   pinMode(PIN_NOT_FAULT, OUTPUT);
   digitalWrite(PIN_NOT_FAULT, 1);
 
-  // Attached the interrupts
+  // Attach the interrupts
   attachInterrupt(digitalPinToInterrupt(PIN_LOCK), lock_isr, CHANGE);
   attachInterrupt(digitalPinToInterrupt(PIN_SYNC), sync_isr, RISING);
 
@@ -311,12 +232,12 @@ void setup() {
   digitalWrite(USB_LED_PIN, ACT_LED_OFF);
   digitalWrite(BUS_LED_PIN, ACT_LED_OFF);
 
-  printHelp();
+  print_help();
 }
 
 void loop() {
   // Bypass mode
-  if( inBypass ) {
+  if( in_bypass ) {
     while( Serial.available() ) {
       // escape sequence support
       static String esc;
@@ -324,7 +245,7 @@ void loop() {
       usb_activity();
       esc += c;
       if( esc.endsWith("+++exit") || esc.endsWith("+++EXIT") ) {
-        inBypass=false;
+        in_bypass=false;
         Serial.println(F("\nOK: exit bypass"));
         esc="";
         break;
@@ -347,8 +268,73 @@ void loop() {
         continue;
       }
       if( c == '\n' ) {
-        parseLine(cmd);
-        cmd="";
+        cmd.trim();
+        if( cmd.length() == 0) {
+          continue;
+        }
+        cmd.toUpperCase();
+
+        if( cmd.equals("HELP") || cmd.equals("?") ) {
+          print_help();
+
+        } else if( cmd.equals("VERSION") ) {
+          print_version();
+
+        } else if( cmd.equals("STATUS") ) {
+          dump_status();
+
+        } else if( cmd.equals("TIME GET") ) {
+          Serial.print(F("EPOCH "));
+          Serial.println(get_epoch());
+
+        } else if( cmd.startsWith("TIME SET EPOCH") ) {
+          unsigned long ep=0;
+          if( sscanf(cmd.c_str(), "TIME SET EPOCH %lu", &ep) == 1 ) {
+            set_epoch(ep);
+            Serial.println(F("OK"));
+          } else {
+            Serial.println(F("ERR"));
+          }
+
+        } else if( cmd.startsWith("TIME SET ") ) {
+          // TIME SET YYYY-MM-DD HH:MM:SS
+          int Y,M,D,h,m,s;
+          uint32_t ep;
+          if( sscanf(cmd.c_str(), "TIME SET %d-%d-%d %d:%d:%d", &Y,&M,&D,&h,&m,&s) == 6
+              && datetime_to_epoch(Y, M, D, h, m, s, &ep) ) {
+            set_epoch(ep);
+            Serial.println(F("OK"));
+          } else {
+            Serial.println(F("ERR"));
+          }
+
+        } else if( cmd.startsWith("BYPASS ON") ) {
+          long baud = 115200;
+          int sp = cmd.indexOf(' ', 9);
+          if( sp > 0 ) {
+            baud = cmd.substring(sp+1).toInt();
+            if( baud <= 0 ) {
+              baud = 115200;
+            }
+          }
+          Serial1.begin(baud); // D6/D7 (GP0/GP1) on XIAO RP2040
+          in_bypass = true;
+          Serial.print(F("OK: bypass on @")); Serial.println(baud);
+          Serial.println(F("(escape with '+++exit')"));
+
+        } else if( cmd.equals("BYPASS OFF") ) {
+          in_bypass=false;
+          Serial.println(F("OK: bypass off"));
+
+        } else if( cmd.equals("RESET") ) {
+          Serial.println(F("Resetting..."));
+          delay(50);
+          rp2040.reboot();
+
+        } else {
+          Serial.println(F("ERR: unknown (HELP)"));
+        }
+        cmd = "";
       } else {
         cmd += c;
       }
@@ -361,11 +347,11 @@ void loop() {
   }
 
   // Periodic refreshing of sync pulse state
-  if (millis() - tSense >= 1000) {
-    tSense = millis();
-    if( syncSeen ) {
-      if( ((micros() - lastSyncMicros)/1e6) > 6 ) {
-        syncSeen = false;
+  if (millis() - t_sense >= 1000) {
+    t_sense = millis();
+    if( sync_seen ) {
+      if( ((micros() - last_sync_micros)/1e6) > 6 ) {
+        sync_seen = false;
       }
     }
   }
