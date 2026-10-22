@@ -23,6 +23,9 @@
 // Timeout in ms before flushing the command input buffer (when not in bypass mode)
 #define CMD_TIMEOUT_MS 2000
 
+// Maximum command length in characters
+#define MAX_CMD_LEN 128
+
 // Control variables
 uint8_t usb_led = 0, bus_led = 0;
 unsigned long usb_led_time = 0, bus_led_time = 0;
@@ -85,6 +88,7 @@ bool in_bypass = false;
 unsigned long t_sense = 0;
 long int last_char = -1;
 String cmd;
+bool cmd_overflow = false;
 
 uint32_t get_epoch() {
   datetime_t t;
@@ -244,6 +248,9 @@ void loop() {
       char c = (char)Serial.read();
       usb_activity();
       esc += c;
+      if( esc.length() > 7 ) {
+        esc.remove(0, esc.length() - 7);
+      }
       if( esc.endsWith("+++exit") || esc.endsWith("+++EXIT") ) {
         in_bypass=false;
         Serial.println(F("\nOK: exit bypass"));
@@ -268,6 +275,14 @@ void loop() {
         continue;
       }
       if( c == '\n' ) {
+        // Drop the whole line if it was too long to fit in the buffer
+        if( cmd_overflow ) {
+          Serial.println(F("ERR: too long"));
+          cmd_overflow = false;
+          cmd = "";
+          continue;
+        }
+
         cmd.trim();
         if( cmd.length() == 0) {
           continue;
@@ -335,14 +350,17 @@ void loop() {
           Serial.println(F("ERR: unknown (HELP)"));
         }
         cmd = "";
-      } else {
+      } else if( cmd.length() < MAX_CMD_LEN ) {
         cmd += c;
+      } else {
+        cmd_overflow = true;
       }
     }
 
     // Clear out any dangling text in the command buffer
     if (cmd.length() != 0 && millis() - last_char > CMD_TIMEOUT_MS) {
       cmd = "";
+      cmd_overflow = false;
     }
   }
 
